@@ -275,6 +275,7 @@ contract PDATAToken is StandardToken, SafeMath {
         else if(s == State.PreSale) return 45;
         else if(s == State.Sale)
         {
+            //TODO here
             uint bonus = 40 - ((block.timestamp - publicSaleStart) / (24 * 60 * 60))
             if bonus > 40 return 0;
             else return bonus;
@@ -314,20 +315,11 @@ contract PDATAToken is StandardToken, SafeMath {
             require(raisePreSale < capPreSale && usdCentsRaise < presaleWhitelist[msg.sender]); //ensure pre-sale cap, 15m usd * 100 so we have cents
             presaleWhitelist[msg.sender] = presaleWhitelist[msg.sender] - usdCentsRaise; // Remove the amount purchased from the pre-sale permitted for that user
         }
-        else if (current_state == State.Day1)
+        else if (current_state == State.Sale)
         {
+            //TODO here
             raiseDay1 = safeAdd(raiseDay1, usdCentsRaise); //add current raise to pre-sell amount
             require(raiseDay1 < (capDay1 - raisePreSale)); //ensure day 1 cap, which is lower by the amount we pre-sold
-        }
-        else if (current_state == State.Day2)
-        {
-            raiseDay2 = safeAdd(raiseDay2, usdCentsRaise); //add current raise to pre-sell amount
-            require(raiseDay2 < capDay2); //ensure day 2 cap
-        }
-        else if (current_state == State.Day3)
-        {
-            raiseDay3 = safeAdd(raiseDay3, usdCentsRaise); //add current raise to pre-sell amount
-            require(raiseDay3 < capDay3); //ensure day 3 cap
         }
         else revert();
 
