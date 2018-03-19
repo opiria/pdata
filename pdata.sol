@@ -163,19 +163,29 @@ contract PDATAToken is StandardToken, SafeMath {
     1. The value of the token fluctuates in reference to the centsPerEth set on the contract.
     2. The tokens are priced in cents.  So all token purchases will be calculated out live at that time.
 
-    CAP:
-    The  Sale  Period  will  begin  on March 26 th  at  8am  New  York  time,  2018  and continue  until either
-    (a)  USD  19  million  worth  of  Ether  or  Bitcoin  are  received  for  PDATA  Tokens  sold
-    (b)  May 7th, 2018 8am New York time.
+
+    1. Private sale (not handled by the smart contract directly, these sales will be allocated afterwards)
+    Date: ongoing - April 9th 2018, 10 AM GMT
+    Minimum: 50,000 USD
+    Bonus: 50%
+
+    2. Pre-sale
+    Date: April 10th 2018 - April 20th 2018, 10 AM GMT
+    Cap: 25 million USD
+    Minimum: 5,000 USD
+    Bonus: 20%
+
+    3. TGE, public sale
+    Date: April 21th 2018 - May 21th 2018, 10 AM GMT
+    Cap: 30 million USD
+    Hard cap: 35 million USD
+    Minimum: N/A
+    Bonus: 15% -1% per day
 
     PRICE:
     We will create roughly 650 million PDATA tokens.
     PDATA token is worth $0.1 dollars (10 US cents).
 
-    BONUS:
-    Day  1  of  the  ICO  the bonus will  be  40%.
-    Each  day  the bonus will  go  down  by 1% down to a minimum of 0%. 
-    The last 3 days of the ICO there will be no more bonus
 
     TOKEN DISTRIBUTION:
     issued: 50% of the coins will be issued for the ICO
@@ -191,12 +201,8 @@ contract PDATAToken is StandardToken, SafeMath {
     Purchased tokens come available to be withdrawn 31 days after the sale has completed.
     */
 
-    enum State { PreSale, Sale, Running, Halted } // the states through which this contract goes
+    enum State { PreSale, Pause, Sale, Running, Halted } // the states through which this contract goes
     State state;
-
-    // Pricing for the pre-sale in US Cents.
-    uint public capPreSale = 5 * 10**8;  // 15M USD cap for pre-sale, this subtracts from day1 cap
-    uint public capTotal = 19 * 10**8;  // 20M USD cap
 
     // Token pricing information
     uint public weiPerEther = 10**18;
@@ -206,18 +212,29 @@ contract PDATAToken is StandardToken, SafeMath {
     uint public subdivisions = 10**9;
 
     // Amount of funds raised in stages of pre-sale
-    uint public raisePreSale = 0;  // USD raise during the pre-sale period
-    uint public raiseSale = 0;  // USD raised during the sale period
+    uint public raisePreSale = 0;  // USD cents raised during the pre-sale period
+    uint public raiseSale = 0;  // USD cents raised during the sale period
+
+    // Pricing for the pre-sale in US Cents.
+    uint public capPreSale = 25 * 10**8;  // 25M USD cap for pre-sale
+    uint public capTotal = 30 * 10**8;  // 30M USD cap
 
     // Block timing/contract unlocking information
-    uint public publicSaleStart = 1522069200; // Monday, March 26, 2018 1:00:00 PM GMT
-    uint public saleEnd = 1525698000; // Monday, May 7, 2018 1:00:00 PM GMT
 
-    uint public coinTradeStart = publicSaleStart + (3600 * 24 * 56); // 56 days later
-    uint public year1Unlock = 1557234000; // Tuesday, May 7, 2019 1:00:00 PM GMT
-    uint public year2Unlock = 1588856400; // Thursday, May 7, 2020 1:00:00 PM GMT
-    uint public year3Unlock = 1620392400; // Friday, May 7, 2021 1:00:00 PM GMT
-    uint public year4Unlock = 1651928400; // Saturday, May 7, 2022 1:00:00 PM GMT
+    // 1. Private sale Date: ongoing - April 9th 2018, 10 AM GMT -> this is not handled by the smart contract, we just transfer the tokens afterwards
+    // 2. Pre-sale Date: April 10th 2018 - April 20th 2018, 10 AM GMT
+    // public sale Date: April 21th 2018 - May 21th 2018, 10 AM GMT 
+
+    uint public preSaleStart = 1523354400; // Tuesday, April 10, 2018 10:00:00 AM
+    uint public preSaleEnd = preSaleStart + (86400 * 10); // 10 days later
+    uint public publicSaleStart = preSaleEnd + 86400; // one day of pause
+    uint public publicSaleEnd = publicSaleStart + (86400 * 30); // 30 days later
+
+    uint public coinTradeStart = publicSaleEnd + (86400 * 30); // 30 days later
+    uint public year1Unlock = coinTradeStart + (86400 * 365); // one year later, 2019
+    uint public year2Unlock = year1Unlock + (86400 * 366); // one year later, 2020 is a leap year
+    uint public year3Unlock = year2Unlock + (86400 * 365); // one year later, 2021
+    uint public year4Unlock = year3Unlock + (86400 * 365); // one year later, 2022
 
     // Have the post-reward allocations been completed
     bool public allocatedFounders = false;
@@ -226,10 +243,8 @@ contract PDATAToken is StandardToken, SafeMath {
     bool public allocated3Year = false;
     bool public allocated4Year = false;
 
-    // Token count information
-    uint public totalTokensSale = 500000000; //total number of tokens being sold in the ICO, excluding bonuses, reserve, and team distributions
-    uint public totalTokensReserve = 330000000;
-    uint public totalTokensCompany = 220000000;
+    uint public totalTokensCompany = 750 * 10**5;
+    uint public totalTokensReserve = 1125 * 10**5;
 
     bool public halted = false; //the founder address can set this to true to halt the crowdsale due to emergency.
 
@@ -261,8 +276,10 @@ contract PDATAToken is StandardToken, SafeMath {
     function getCurrentState() constant public returns (State) {
 
         if(halted) return State.Halted;
-        else if(block.timestamp < publicSaleStart) return State.PreSale;
-        else if(block.timestamp > publicSaleStart && block.timestamp <= saleEnd) return State.Sale;
+        else if (block.timestamp < preSaleStart) revert();
+        else if (block.timestamp > preSaleStart && block.timestamp < preSaleEnd) return State.PreSale;
+        else if (block.timestamp > preSaleEnd && block.timestamp < publicSaleStart) return State.Pause;
+        else if (block.timestamp > publicSaleStart && block.timestamp <= publicSaleEnd) return State.Sale;
         else return State.Running;
     }
 
@@ -272,12 +289,12 @@ contract PDATAToken is StandardToken, SafeMath {
     function getCurrentBonusInPercent() constant public returns (uint) {
         State s = getCurrentState();
         if (s == State.Halted) revert();
-        else if(s == State.PreSale) return 45;
+        else if(s == State.PreSale) return 20;
+        else if(s == State.Pause) return 15; //technically this is the current bonus, you just cannot buy on this day
         else if(s == State.Sale)
         {
-            //TODO here
-            uint bonus = 40 - ((block.timestamp - publicSaleStart) / (24 * 60 * 60))
-            if bonus > 40 return 0;
+            uint bonus = safeSub(15, safeDiv(safeSub(block.timestamp, publicSaleStart), 86400))
+            if bonus > 15 return 0; //we are using unsigned ints, so if the above is less than 0 it is actually way larger than 40
             else return bonus;
         }
         else return 0;
@@ -317,19 +334,13 @@ contract PDATAToken is StandardToken, SafeMath {
         }
         else if (current_state == State.Sale)
         {
-            //TODO here
-            raiseDay1 = safeAdd(raiseDay1, usdCentsRaise); //add current raise to pre-sell amount
-            require(raiseDay1 < (capDay1 - raisePreSale)); //ensure day 1 cap, which is lower by the amount we pre-sold
+            raiseSale = safeAdd(raiseSale, usdCentsRaise); //add current raise to pre-sell amount
+            require(raiseSale < (capTotal - raisePreSale)); //ensure day 1 cap, which is lower by the amount we pre-sold
         }
         else revert();
 
         uint tokens = safeDiv(msg.value, getTokenPriceInWEI()); // Calculate number of tokens to be paid out
         uint bonus = safeDiv(safeMul(tokens, getCurrentBonusInPercent()), 100); // Calculate number of bonus tokens
-
-        if (current_state == State.PreSale) {
-            // Remove the extra 5% from the totalTokensCompany, in order to keep the 550m on track.
-            totalTokensCompany = safeSub(totalTokensCompany, safeDiv(bonus, 4));
-        }
 
         uint totalTokens = safeAdd(tokens, bonus);
 
@@ -349,7 +360,7 @@ contract PDATAToken is StandardToken, SafeMath {
         require(getCurrentState() == State.Running);
         uint tokens = 0;
 
-        if(block.timestamp > saleEnd && !allocatedFounders)
+        if(block.timestamp > publicSaleEnd && !allocatedFounders)
         {
             allocatedFounders = true;
             tokens = totalTokensCompany;
